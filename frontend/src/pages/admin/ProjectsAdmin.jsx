@@ -22,6 +22,8 @@ export default function ProjectsAdmin() {
   const [editing, setEditing] = useState(null); // project object or "new" or null
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [imageError, setImageError] = useState("");
 
   const load = () => {
     setLoading(true);
@@ -37,6 +39,8 @@ export default function ProjectsAdmin() {
   const openNew = () => {
     setForm(emptyForm);
     setFormError("");
+    setImageError("");
+    setUploading(false);
     setEditing("new");
   };
 
@@ -53,6 +57,8 @@ export default function ProjectsAdmin() {
       order: p.order,
     });
     setFormError("");
+    setImageError("");
+    setUploading(false);
     setEditing(p);
   };
 
@@ -61,9 +67,34 @@ export default function ProjectsAdmin() {
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
   };
 
+  // Uploads the picked file straight to the backend (which streams it to
+  // Cloudinary and returns a permanent URL) as soon as it's selected —
+  // no manual "upload" button needed.
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageError("");
+    setUploading(true);
+    try {
+      const res = await api.upload("/projects/upload", file, "image");
+      setForm((f) => ({ ...f, image: res.data.url }));
+    } catch (err) {
+      setImageError(err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = ""; // allow re-selecting the same file later
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
+
+    if (!form.image) {
+      setFormError("Please upload a project image.");
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
@@ -201,15 +232,30 @@ export default function ProjectsAdmin() {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Image URL">
-                <input
-                  name="image"
-                  value={form.image}
-                  onChange={handleChange}
-                  required
-                  placeholder="/projects/your-image.png or https://..."
-                  className={inputClass}
-                />
+              <Field label="Project Image">
+                <div className="flex items-center gap-3">
+                  {form.image && (
+                    <img
+                      src={form.image}
+                      alt="Preview"
+                      className="w-14 h-14 rounded-lg object-cover border border-white/10 shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={uploading}
+                      className="block w-full text-xs text-white/50 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-white/20 disabled:opacity-50"
+                    />
+                    {uploading && <p className="text-xs text-white/40 mt-1">Uploading…</p>}
+                    {imageError && <p className="text-xs text-red-400 mt-1">{imageError}</p>}
+                    {!uploading && !imageError && !form.image && (
+                      <p className="text-xs text-white/30 mt-1">JPG, PNG, WEBP, GIF or SVG — up to 5MB</p>
+                    )}
+                  </div>
+                </div>
               </Field>
               <Field label="Technologies (comma separated)">
                 <input
@@ -264,10 +310,10 @@ export default function ProjectsAdmin() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || uploading}
               className="w-full mt-5 rounded-lg bg-white text-black font-semibold text-sm py-2.5 hover:bg-white/90 transition-colors disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save Project"}
+              {uploading ? "Uploading image…" : saving ? "Saving…" : "Save Project"}
             </button>
           </form>
         </div>

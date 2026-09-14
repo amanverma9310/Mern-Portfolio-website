@@ -46,12 +46,45 @@ async function request(path, { method = "GET", body, headers } = {}) {
   return data;
 }
 
+// Separate from `request()` because file uploads need multipart/form-data,
+// not JSON — the browser sets that Content-Type header itself (with the
+// correct boundary) as long as we don't set one manually.
+async function uploadFile(path, file, fieldName = "image") {
+  const formData = new FormData();
+  formData.append(fieldName, file);
+
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+  } catch (err) {
+    throw new ApiError("Can't reach the server. Please try again shortly.", 0);
+  }
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // no/invalid JSON body
+  }
+
+  if (!res.ok) {
+    throw new ApiError(data?.message || `Upload failed (${res.status})`, res.status);
+  }
+
+  return data;
+}
+
 export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: "POST", body }),
   put: (path, body) => request(path, { method: "PUT", body }),
   patch: (path, body) => request(path, { method: "PATCH", body }),
   delete: (path) => request(path, { method: "DELETE" }),
+  upload: (path, file, fieldName) => uploadFile(path, file, fieldName),
 };
 
 export { ApiError, BASE_URL };

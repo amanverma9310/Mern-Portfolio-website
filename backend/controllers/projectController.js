@@ -1,6 +1,35 @@
 const asyncHandler = require("express-async-handler");
 const { validationResult } = require("express-validator");
 const Project = require("../models/Project");
+const cloudinary = require("../config/cloudinary");
+
+// @route  POST /api/projects/upload
+// @access Private (admin)
+// Accepts a single "image" file (multipart/form-data), uploads it to
+// Cloudinary straight from memory (no disk writes — see middleware/upload.js)
+// and returns the permanent, secure URL to store on the project document.
+const uploadProjectImage = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    res.status(400);
+    throw new Error("No image file uploaded");
+  }
+
+  const streamUpload = () =>
+    new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: "portfolio-projects", resource_type: "image" },
+        (error, result) => {
+          if (result) resolve(result);
+          else reject(error);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+  const result = await streamUpload();
+
+  res.status(201).json({ success: true, data: { url: result.secure_url } });
+});
 
 // @route  GET /api/projects
 // @access Public
@@ -66,4 +95,5 @@ module.exports = {
   createProject,
   updateProject,
   deleteProject,
+  uploadProjectImage,
 };
